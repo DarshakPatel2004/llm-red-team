@@ -40,6 +40,23 @@ def _print_results(console, summary, results=None):
             f"  [bold green]Attack Blocked: {blocked} ({summary.get('blocked_rate', 0)}%)[/bold green]"
         )
         console.print(f"  Neutral/Clarification: {summary.get('neutral', 0)}")
+    if summary.get("defenses"):
+        console.print(
+            f"  [bold]Defenses ({summary.get('defense_mode', 'block')}):[/bold] "
+            f"{', '.join(summary['defenses'])}"
+        )
+        console.print(f"  Defense-blocked: {summary.get('defense_blocked', 0)}")
+        if summary.get("defense_mode") == "measure":
+            console.print(f"  Would-block (measure): {summary.get('defense_would_block', 0)}")
+
+
+def _resolve_defenses(spec: str | None) -> list[str]:
+    from llm_red_team.defense.strategies import resolve_defenses
+    try:
+        return resolve_defenses(spec)
+    except ValueError as e:
+        console.print(f"[red]{e}[/red]")
+        raise SystemExit(2)
 
 
 def _verdict_tag(r):
@@ -78,6 +95,10 @@ def _print_test(r, verbose=False):
     status = "[green]PASS[/green]" if r["success"] else "[red]FAIL[/red]"
     verdict = _verdict_tag(r)
     line = f"[{status}] {r['prompt_id']} | tier {r['tier']} | {r['attack_type']} | {r['category']} | {verdict}"
+    if r.get("defense_blocked"):
+        line += f" [bold yellow][DEFENSE:{r.get('blocking_defense')}][/bold yellow]"
+    elif r.get("defense_would_block"):
+        line += f" [yellow][would-block:{r.get('would_block_defense')}][/yellow]"
     if verbose:
         console.print(line)
         console.print(f"  [bold]Prompt:[/bold] {_safe(r['prompt_text'], 300)}")
@@ -125,10 +146,12 @@ def _run_live(runner, prompts, parallel=1, verbose=False):
 @click.option('--judge-model', default=None, help='Model name used as external judge (default: heuristic)')
 @click.option('--report', default=None, help='Export report: json, md, or html (default: none)')
 @click.option('--report-path', default=None, help='Report output path (default: reports/run-<model>-<ts>)')
-def run(models: str | None, tiers: str | None, all_enabled: bool, dry_run: bool, parallel: int, max_tests: int | None, verbose: bool, resume: bool, judge_model: str | None, report: str | None, report_path: str | None) -> None:
+@click.option('--defenses', default=None, help='Defenses: csv names, all-prompt, all-output, all, or none')
+@click.option('--defense-mode', default='block', type=click.Choice(['block', 'measure']), help='block (fail-safe) or measure (log would-block, for FPR estimation)')
+def run(models: str | None, tiers: str | None, all_enabled: bool, dry_run: bool, parallel: int, max_tests: int | None, verbose: bool, resume: bool, judge_model: str | None, report: str | None, report_path: str | None, defenses: str | None, defense_mode: str) -> None:
     """Run adversarial tests against configured models."""
     from llm_red_team.config.loader import ConfigLoader
-    from llm_red_team.clients import MockClient, AnthropicClient, OpenAIClient, OllamaClient
+    from llm_red_team.clients import MockClient, AnthropicClient, OpenAIClient, OllamaClient, GoogleClient
     from llm_red_team.engine.runner import TestRunner, BatchExecutor
     from llm_red_team.attacks import ALL_PROMPTS
     from llm_red_team.analysis.judge import AttackJudge
@@ -154,6 +177,8 @@ def run(models: str | None, tiers: str | None, all_enabled: bool, dry_run: bool,
             client = OpenAIClient(model_cfg["model_id"], model_cfg)
         elif provider == "ollama":
             client = OllamaClient(model_cfg["model_id"], model_cfg)
+        elif provider == "google":
+            client = GoogleClient(model_cfg["model_id"], model_cfg)
         else:
             client = MockClient(model_name, model_cfg)
 
@@ -168,13 +193,16 @@ def run(models: str | None, tiers: str | None, all_enabled: bool, dry_run: bool,
                 judge = AttackJudge(OpenAIClient(jm_cfg["model_id"], jm_cfg))
             elif jprovider == "anthropic":
                 judge = AttackJudge(AnthropicClient(jm_cfg["model_id"], jm_cfg))
+            elif jprovider == "google":
+                judge = AttackJudge(GoogleClient(jm_cfg["model_id"], jm_cfg))
             else:
                 judge = AttackJudge(MockClient(judge_model, jm_cfg))
             console.print(f"[dim]Using {jm_cfg.get('model_id', judge_model)} as external judge[/dim]")
         else:
             console.print(f"[yellow]Judge model '{judge_model}' not found; falling back to heuristic[/yellow]")
 
-    runner = TestRunner(client, parallel=parallel, judge=judge)
+    runner = TestRunner(client, parallel=parallel, judge=judge,
+                        defenses=_resolve_defenses(defenses), defense_mode=defense_mode)
 
     selected = ALL_PROMPTS
     if tiers:
@@ -272,7 +300,7 @@ def models_add(name: str, type: str, provider: str, endpoint: str | None, model_
 def report(models: str | None, format: str, output: str | None, parallel: int) -> None:
     """Run tests and generate a full security report."""
     from llm_red_team.engine.runner import TestRunner
-    from llm_red_team.clients import MockClient, AnthropicClient, OpenAIClient, OllamaClient
+    from llm_red_team.clients import MockClient, AnthropicClient, OpenAIClient, OllamaClient, GoogleClient
     from llm_red_team.analysis.judge import AttackJudge
     from llm_red_team.analysis.report import build_report_data, export_report
     from llm_red_team.config.loader import ConfigLoader

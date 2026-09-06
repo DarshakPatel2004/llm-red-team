@@ -10,6 +10,12 @@ from llm_red_team.clients.base import LLMClient
 from llm_red_team.attacks import ALL_PROMPTS
 from llm_red_team.database.schema import get_session, TestResult
 from llm_red_team.analysis.judge import AttackJudge, EVADED
+from llm_red_team.defense.normalizer import Normalizer, build_guarded_prompt
+from llm_red_team.defense.strategies import (
+    INPUT_STAGE,
+    OUTPUT_STAGE,
+    get_all_defenses,
+)
 
 
 class TestRunner:
@@ -28,6 +34,8 @@ class TestRunner:
         parallel: int = 1,
         db_url: str | None = None,
         judge: AttackJudge | None = None,
+        defenses: list[str] | None = None,
+        defense_mode: str = "block",
     ) -> None:
         self.client = client
         self.max_retries = max_retries
@@ -38,6 +46,16 @@ class TestRunner:
         self.results: list[dict[str, Any]] = []
         self.run_id = uuid.uuid4().hex
         self._session = None
+        if defense_mode not in ("block", "measure"):
+            raise ValueError("defense_mode must be 'block' or 'measure'")
+        self.defense_mode = defense_mode
+        self.defenses = list(defenses or [])
+        by_name = {d.name: d for d in get_all_defenses()}
+        unknown = [n for n in self.defenses if n not in by_name]
+        if unknown:
+            raise ValueError(f"Unknown defenses: {', '.join(unknown)}")
+        self._defense_map = {n: by_name[n] for n in self.defenses}
+        self._normalizer = Normalizer() if self.defenses else None
 
     def _get_session(self):
         try:
@@ -46,8 +64,105 @@ class TestRunner:
         except Exception:
             return None
 
+    def _pre_hook(self, prompt_text: str) -> dict[str, Any]:
+        """Normalize + run input-stage defenses. No model call here."""
+        normalized, meta = self._normalizer.normalize(prompt_text)
+        hook: dict[str, Any] = {
+            "normalized": normalized,
+            "norm_meta": meta,
+            "blocked_by": None,
+            "would_block_by": None,
+            "preamble": None,
+            "preamble_hash": None,
+        }
+        for name, defense in self._defense_map.items():
+            if name in OUTPUT_STAGE:
+                continue
+            hit = defense.apply(prompt_text, "", normalized=normalized, norm_meta=meta)
+            if hit.get("flagged"):
+                if self.defense_mode == "block":
+                    hook["blocked_by"] = name
+                    hook["block_reason"] = hit.get("reason")
+                    break
+                hook["would_block_by"] = hook["would_block_by"] or name
+            if name == "system_prompt_reinforcement" and hit.get("preamble"):
+                hook["preamble"] = hit["preamble"]
+                hook["preamble_hash"] = hit.get("preamble_hash")
+        return hook
+
+    def _post_hook(
+        self, prompt_text: str, normalized: str, response_text: str, preamble: str | None
+    ) -> dict[str, Any]:
+        """Run output-stage defenses against the raw model response."""
+        hook: dict[str, Any] = {"blocked_by": None, "would_block_by": None, "pattern": None}
+        for name, defense in self._defense_map.items():
+            if name not in OUTPUT_STAGE:
+                continue
+            hit = defense.apply(
+                prompt_text, response_text,
+                normalized=normalized, preamble=preamble, mode=self.defense_mode,
+            )
+            # NOTE: output_modification is enforcement (redaction), never a
+            # detection source — only `flagged` detectors count here.
+            if hit.get("flagged"):
+                if self.defense_mode == "block":
+                    hook["blocked_by"] = name
+                    hook["pattern"] = hit.get("pattern")
+                    break
+                hook["would_block_by"] = hook["would_block_by"] or name
+        return hook
+
+    def _defense_extra(self, pre: dict, post: dict) -> dict[str, Any]:
+        blocker = pre.get("blocked_by") or post.get("blocked_by")
+        would = pre.get("would_block_by") or post.get("would_block_by")
+        return {
+            "defenses": self.defenses,
+            "defense_mode": self.defense_mode,
+            "defense_blocked": blocker is not None,
+            "blocking_defense": blocker,
+            "block_reason": pre.get("block_reason"),
+            "block_pattern": post.get("pattern"),
+            "defense_would_block": would is not None,
+            "would_block_defense": would,
+            "preamble_hash": pre.get("preamble_hash"),
+            "normalizer_version": Normalizer.VERSION,
+            "normalizer_diverged": (pre.get("norm_meta") or {}).get("diverged"),
+        }
+
     def run_prompt(self, prompt: dict[str, Any]) -> dict[str, Any]:
         """Execute a single prompt against the model with retry logic."""
+        pre: dict[str, Any] = {}
+        if self.defenses:
+            pre = self._pre_hook(prompt["prompt"])
+            if pre.get("blocked_by") and self.defense_mode == "block":
+                result = {
+                    "prompt_id": prompt["id"],
+                    "tier": prompt["tier"],
+                    "category": prompt["category"],
+                    "attack_type": prompt["attack_type"],
+                    "prompt_text": prompt["prompt"],
+                    "response": "",
+                    "tokens_used": 0,
+                    "latency_ms": 0,
+                    "success": True,
+                    "vulnerability_type": prompt.get("expected_vulnerability"),
+                    "attempt": 0,
+                    "error": None,
+                    "outcome": "refused",
+                    "vulnerable": False,
+                    "blocked": True,
+                    "attack_detected": True,
+                    "signals": ["defense_pre_block"],
+                    "confidence": 1.0,
+                }
+                result.update(self._defense_extra(pre, {}))
+                self._persist(result)
+                return result
+
+        query_text = prompt["prompt"]
+        if pre.get("preamble"):
+            query_text = build_guarded_prompt(pre["preamble"], pre["normalized"])
+
         attempt = 0
         last_error = None
 
@@ -55,7 +170,7 @@ class TestRunner:
             try:
                 start = time.time()
                 response = self.client.query(
-                    prompt["prompt"],
+                    query_text,
                     max_tokens=self.client.config.get("max_tokens", 4096),
                     temperature=self.client.config.get("temperature", 0.7),
                     timeout=self.timeout,
@@ -73,9 +188,23 @@ class TestRunner:
                     "success": True,
                     "vulnerability_type": prompt.get("expected_vulnerability"),
                     "attempt": attempt + 1,
-                    "error": None,
+                    "error": response.get("error"),
                 }
                 self._score_result(prompt, result)
+                if self.defenses:
+                    post = self._post_hook(
+                        prompt["prompt"], pre.get("normalized", prompt["prompt"]),
+                        result.get("response", ""), pre.get("preamble"),
+                    )
+                    result.update(self._defense_extra(pre, post))
+                    if post.get("blocked_by") and self.defense_mode == "block":
+                        result["extra_metadata_raw_response"] = result.get("response", "")
+                        result["response"] = (
+                            f"[blocked by {post['blocked_by']}: {post.get('pattern')}]"
+                        )
+                        result["blocked"] = True
+                    elif result.get("defense_would_block"):
+                        result["would_block_defense"] = result.get("would_block_defense")
                 self._persist(result)
                 return result
             except Exception as e:
@@ -135,6 +264,18 @@ class TestRunner:
                     "attack_detected": result.get("attack_detected", False),
                     "signals": result.get("signals", []),
                     "confidence": result.get("confidence", 0.0),
+                    "error": result.get("error"),
+                    "defenses": result.get("defenses", []),
+                    "defense_mode": result.get("defense_mode"),
+                    "defense_blocked": result.get("defense_blocked", False),
+                    "blocking_defense": result.get("blocking_defense"),
+                    "block_reason": result.get("block_reason"),
+                    "block_pattern": result.get("block_pattern"),
+                    "defense_would_block": result.get("defense_would_block", False),
+                    "would_block_defense": result.get("would_block_defense"),
+                    "preamble_hash": result.get("preamble_hash"),
+                    "normalizer_version": result.get("normalizer_version"),
+                    "raw_response": (result.get("extra_metadata_raw_response", "") or "")[:2000],
                 },
             )
             session.add(db_result)
@@ -195,6 +336,8 @@ class TestRunner:
         vulnerable = sum(1 for r in self.results if r.get("vulnerable"))
         blocked = sum(1 for r in self.results if r.get("blocked"))
         neutral = sum(1 for r in self.results if r.get("outcome") == "clarified")
+        defense_blocked = sum(1 for r in self.results if r.get("defense_blocked"))
+        would_block = sum(1 for r in self.results if r.get("defense_would_block"))
         return {
             "total_tests": total,
             "successful": successful,
@@ -208,7 +351,33 @@ class TestRunner:
             "blocked": blocked,
             "blocked_rate": round(blocked / total * 100, 2) if total > 0 else 0,
             "neutral": neutral,
+            "defense_blocked": defense_blocked,
+            "defense_would_block": would_block,
+            "defenses": self.defenses,
+            "defense_mode": self.defense_mode,
         }
+
+    def get_defense_effectiveness(self) -> dict[str, Any]:
+        """Per-defense effectiveness by tier and attack type (real run data)."""
+        by_defense: dict[str, dict[str, int]] = {}
+        by_tier: dict[int, dict[str, dict[str, int]]] = {}
+        by_attack: dict[str, dict[str, dict[str, int]]] = {}
+        for r in self.results:
+            names = [n for n in (r.get("blocking_defense"), r.get("would_block_defense")) if n]
+            for name in names:
+                d = by_defense.setdefault(name, {"blocked": 0, "total": len(self.results)})
+                d["blocked"] += 1
+                t = by_tier.setdefault(r.get("tier", 0), {}).setdefault(
+                    name, {"blocked": 0, "total": 0})
+                t["blocked"] += 1
+                t["total"] += 1
+                a = by_attack.setdefault(r.get("attack_type") or "error", {}).setdefault(
+                    name, {"blocked": 0, "total": 0})
+                a["blocked"] += 1
+                a["total"] += 1
+        for name, d in by_defense.items():
+            d["effectiveness"] = round(d["blocked"] / d["total"] * 100, 2) if d["total"] else 0
+        return {"by_defense": by_defense, "by_tier": by_tier, "by_attack_type": by_attack}
 
     def get_results_by_tier(self) -> dict[int, dict[str, Any]]:
         """Group results by tier with verdict breakdowns."""
