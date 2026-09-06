@@ -85,11 +85,11 @@ def models() -> None:
     config = ConfigLoader()
     cfg = config.load()
     table = Table(title="Available Models")
-    table.columns.add("Name", justify_center=True)
-    table.columns.add("Provider", justify_center=True)
-    table.columns.add("Type", justify_center=True)
-    table.columns.add("Enabled", justify_center=True)
-    table.columns.add("Tags")
+    table.add_column("Name", justify="center")
+    table.add_column("Provider", justify="center")
+    table.add_column("Type", justify="center")
+    table.add_column("Enabled", justify="center")
+    table.add_column("Tags")
 
     for name, model in cfg["models"].items():
         table.add_row(
@@ -172,8 +172,8 @@ def health() -> None:
     config = ConfigLoader()
     cfg = config.load()
     table = Table(title="Model Health Check")
-    table.columns.add("Model", justify_center=True)
-    table.columns.add("Status", justify_center=True)
+    table.add_column("Model", justify="center")
+    table.add_column("Status", justify="center")
 
     for name, model in cfg["models"].items():
         table.add_row(name, "Healthy" if model.get("enabled") else "Disabled")
