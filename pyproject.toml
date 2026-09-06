@@ -22,8 +22,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = [
-    "pytest>=7.0",
+dev = [    "pytest>=7.0",
     "pytest-asyncio>=0.21.0",
     "pytest-cov>=4.1.0",
     "black>=23.0",
@@ -32,6 +31,7 @@ dev = [
     "locust>=2.0",
 ]
 local = ["ollama>=0.2.0"]
+guard = ["transformers>=4.40"]
 
 [project.scripts]
 llm-red-team = "llm_red_team.api.cli:main"

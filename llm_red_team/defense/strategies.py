@@ -480,6 +480,9 @@ OUTPUT_STAGE = (
     "output_modification",
 )
 
+# Opt-in defenses registered outside get_all_defenses() (pinned at 18).
+EXTRA_DEFENSES = ("prompt_guard",)
+
 
 def resolve_defenses(spec: str | None) -> list[str]:
     """Resolve a --defenses spec to concrete defense names."""
@@ -492,7 +495,7 @@ def resolve_defenses(spec: str | None) -> list[str]:
         return list(INPUT_STAGE)
     if spec == "all-output":
         return list(OUTPUT_STAGE)
-    names = {d.name for d in get_all_defenses()}
+    names = {d.name for d in get_all_defenses()} | set(EXTRA_DEFENSES)
     out = [p.strip() for p in spec.split(",") if p.strip() in names]
     unknown = [p.strip() for p in spec.split(",") if p.strip() and p.strip() not in names]
     if unknown:

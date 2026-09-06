@@ -11,12 +11,12 @@ from llm_red_team.attacks import ALL_PROMPTS
 from llm_red_team.database.schema import get_session, TestResult
 from llm_red_team.analysis.judge import AttackJudge, EVADED
 from llm_red_team.defense.normalizer import Normalizer, build_guarded_prompt
+from llm_red_team.defense.prompt_guard import PromptGuardDefense
 from llm_red_team.defense.strategies import (
     INPUT_STAGE,
     OUTPUT_STAGE,
     get_all_defenses,
 )
-
 
 class TestRunner:
     """Executes adversarial prompts against LLM models.
@@ -51,6 +51,7 @@ class TestRunner:
         self.defense_mode = defense_mode
         self.defenses = list(defenses or [])
         by_name = {d.name: d for d in get_all_defenses()}
+        by_name["prompt_guard"] = PromptGuardDefense()
         unknown = [n for n in self.defenses if n not in by_name]
         if unknown:
             raise ValueError(f"Unknown defenses: {', '.join(unknown)}")

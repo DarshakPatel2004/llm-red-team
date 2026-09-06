@@ -113,3 +113,23 @@ Measured on qwen2.5:3b (local, per-tier slices):
   t5 1 (+2 output true positives: t5-006 exfil, t5-008 constant echo).
 - Tier-4 encoding attacks are neutralized by normalization (model receives
   clean text) without needing explicit blocks — sanitization-by-construction.
+
+## 8. As-built record (Phase B, 2026-09-06)
+
+- `defense/prompt_guard.py`: lazy `PromptGuardDefense` (name `prompt_guard`,
+  pipeline level), 512-token sliding window, heuristic fallback; deliberately
+  outside `get_all_defenses()` (pinned at 18) and wired as runner opt-in.
+- `defense/benchmark_defenses.py`: no-model-call harness (heuristic vs guard
+  vs both) with precision/recall/FPR + p50/p95.
+- Meta 22M still gated (403 — access requested, pending). Stood up public
+  `ProtectAI/deberta-v3-base-prompt-injection-v2` instead (~750MB, CPU
+  ~130ms/classify): 4/4 smoke correct.
+- Measured on all 112 prompts: guard recall 0.71–0.77 on successful attacks,
+  but "FPR" 0.55–0.67 is misleading — ground truth is attack *success* while
+  the classifier flags attack *attempts* (including failed ones, which a guard
+  should still block). Threshold sweep 0.5→0.99 barely moves it (bimodal
+  scores); default stays 0.5.
+- Blind-spot analysis: misses concentrate in tier-4 obfuscation (21/48) —
+  exactly where Phase A normalization is strongest. Layers are complementary:
+  guard catches direct injections, normalizer catches encoded ones.
+- Rule: no `prompt_guard` block mode until a benign FPR set exists (still TODO).
