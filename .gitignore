@@ -1,0 +1,84 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+logs/
+
+# Coverage
+htmlcov/
+.coverage
+coverage.xml
+*.cover
+
+# Test
+.pytest_cache/
+.cache/
+test_output/
+
+# Results
+results/
+output/
+
+# Config secrets
+configs/secrets/
+*.key
+*.pem
+
+# Python packages
+*.whl
+*.tar.gz
+
+# Docker (not used)
+Dockerfile
+docker-compose.yml
+Dockerfile.*
+
+# Ollama
+.ollama/

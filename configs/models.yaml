@@ -1,0 +1,78 @@
+models:
+  claude:
+    type: api
+    provider: anthropic
+    model_id: claude-3-opus-20240229
+    api_key: ${ANTHROPIC_API_KEY}
+    enabled: true
+    max_tokens: 4096
+    temperature: 0.7
+    timeout: 30
+    retry_attempts: 3
+    rate_limit: 10
+    tags: [security, production]
+
+  gpt4:
+    type: api
+    provider: openai
+    model_id: gpt-4
+    api_key: ${OPENAI_API_KEY}
+    enabled: true
+    max_tokens: 4096
+    temperature: 0.7
+    timeout: 30
+    retry_attempts: 3
+    rate_limit: 10
+    tags: [security, production]
+
+  llama:
+    type: local
+    provider: ollama
+    model_id: llama2:13b
+    endpoint: http://localhost:11434
+    enabled: true
+    max_tokens: 2048
+    temperature: 0.7
+    timeout: 60
+    retry_attempts: 3
+    rate_limit: 5
+    tags: [local, experimental]
+
+  mistral:
+    type: local
+    provider: ollama
+    model_id: mistral:7b
+    endpoint: http://localhost:11434
+    enabled: true
+    max_tokens: 2048
+    temperature: 0.7
+    timeout: 60
+    retry_attempts: 3
+    rate_limit: 5
+    tags: [local, experimental]
+
+  gemini:
+    type: api
+    provider: google
+    model_id: gemini-pro
+    api_key: ${GOOGLE_API_KEY}
+    enabled: false
+    max_tokens: 4096
+    temperature: 0.7
+    timeout: 30
+    retry_attempts: 3
+    rate_limit: 10
+    tags: [security]
+
+  custom_model:
+    type: api
+    provider: custom
+    endpoint: https://custom-api.com
+    api_key: ${CUSTOM_API_KEY}
+    enabled: false
+    max_tokens: 4096
+    temperature: 0.7
+    timeout: 30
+    retry_attempts: 3
+    rate_limit: 5
+    tags: [custom]
