@@ -9,9 +9,9 @@ class InjectionDetector:
     """Rule-based injection detector for real-time prediction."""
 
     PATTERNS = [
-        re.compile(r'\b(ignore|forget|disregard)\s+(all|your|previous)\s+instructions', re.IGNORECASE),
+        re.compile(r'\b(ignore|forget|disregard)\s+(all|your|previous)\b', re.IGNORECASE),
         re.compile(r'\b(jailbreak|developer mode|system prompt)\b', re.IGNORECASE),
-        re.compile(r'(?<!\w)(D\u0045\u0043\u004F\u0044\u0045)', re.IGNORECASE),
+        re.compile(r'\bD\u0045\u0043\u004F\u0044\u0045\b', re.IGNORECASE),
         re.compile(r'(?:system|developer)\s*:\s*(?:ignore|output)', re.IGNORECASE),
     ]
 

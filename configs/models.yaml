@@ -67,6 +67,7 @@ models:
   custom_model:
     type: api
     provider: custom
+    model_id: custom-v1
     endpoint: https://custom-api.com
     api_key: ${CUSTOM_API_KEY}
     enabled: false

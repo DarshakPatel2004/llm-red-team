@@ -14,7 +14,7 @@ class DefenseStrategy:
 
     def apply(self, prompt: str, response: str) -> dict[str, Any]:
         """Apply the defense to a prompt/response pair."""
-        raise NotImplementedError
+        return {"flagged": False, "action": "allow"}
 
     def evaluate(self, results: list[dict[str, Any]]) -> dict[str, Any]:
         """Evaluate defense effectiveness against test results."""
@@ -33,7 +33,7 @@ class PromptContradictionDefense(DefenseStrategy):
     """Detect conflicting instructions in prompts."""
 
     def apply(self, prompt: str, response: str) -> dict[str, Any]:
-        has_contradiction = "ignore" in prompt.lower() and "follow" in prompt.lower()
+        has_contradiction = "ignore" in prompt.lower() and ("follow" in prompt.lower() or "previous" in prompt.lower() or "all" in prompt.lower())
         return {"flagged": has_contradiction, "action": "block" if has_contradiction else "allow"}
 
 

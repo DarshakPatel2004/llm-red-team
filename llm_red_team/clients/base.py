@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Generator, list
+from typing import Any, Generator
 
 
 class LLMClient(ABC):
