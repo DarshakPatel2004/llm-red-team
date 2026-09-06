@@ -2,9 +2,17 @@
 
 from __future__ import annotations
 import json
+import sys
 import click
 from rich.console import Console
 from rich.table import Table
+
+if sys.platform == "win32" and hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 
 console = Console()
 
@@ -15,14 +23,83 @@ def main() -> None:
     pass
 
 
+def _print_results(console, summary, results):
+    console.print(f"\n[bold green]Results:[/bold green]")
+    console.print(f"  Total Tests: {summary['total_tests']}")
+    console.print(f"  Successful: {summary['successful']}")
+    console.print(f"  Failed: {summary['failed']}")
+    console.print(f"  Success Rate: {summary['success_rate']}%")
+    console.print(f"  Avg Latency: {summary['avg_latency_ms']}ms")
+    console.print(f"  Total Tokens: {summary['total_tokens']}")
+
+
+def _run_subset(runner, prompts):
+    """Run a specific subset of prompts."""
+    results = []
+    for prompt in prompts:
+        result = runner.run_prompt(prompt)
+        results.append(result)
+    runner.results = results
+    return results
+
+
+def _print_test(r, verbose=False):
+    """Print one test result, streaming live if verbose."""
+    def _safe(text, limit):
+        try:
+            t = str(text)[:limit]
+            t.encode("utf-8")
+            return t
+        except Exception:
+            return t.encode("utf-8", errors="replace").decode("utf-8")
+
+    status = "[green]PASS[/green]" if r["success"] else "[red]FAIL[/red]"
+    line = f"[{status}] {r['prompt_id']} | tier {r['tier']} | {r['attack_type']} | {r['category']}"
+    if verbose:
+        console.print(line)
+        console.print(f"  [bold]Prompt:[/bold] {_safe(r['prompt_text'], 300)}")
+        response = _safe(r.get("response", r.get("error", "N/A")), 500)
+        console.print(f"  [bold]Response:[/bold] {response}")
+        if r.get("latency_ms") is not None:
+            console.print(f"  [dim]Latency: {r['latency_ms']}ms | Tokens: {r.get('tokens_used', 0)}[/dim]")
+    else:
+        console.print(line)
+
+
+def _run_live(runner, prompts, parallel=1, verbose=False):
+    """Run prompts and stream results as they complete."""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    results = []
+    if parallel > 1:
+        with ThreadPoolExecutor(max_workers=parallel) as executor:
+            futures = {executor.submit(runner.run_prompt, p): p for p in prompts}
+            for future in as_completed(futures):
+                r = future.result()
+                results.append(r)
+                _print_test(r, verbose)
+                console.print("")
+    else:
+        for p in prompts:
+            r = runner.run_prompt(p)
+            results.append(r)
+            _print_test(r, verbose)
+            console.print("")
+    results.sort(key=lambda r: r["prompt_id"])
+    runner.results = results
+    return results
+
+
 @main.command()
 @click.option('--models', default=None, help='Comma-separated list of models')
 @click.option('--tiers', default=None, help='Comma-separated tier numbers')
 @click.option('--all-enabled', is_flag=True, help='Run all enabled models')
 @click.option('--dry-run', is_flag=True, help='Run with mock client')
 @click.option('--parallel', default=1, type=int, help='Parallel workers')
+@click.option('--max-tests', default=None, type=int, help='Limit number of tests to run')
+@click.option('--verbose', is_flag=True, help='Show each prompt and response')
 @click.option('--resume', is_flag=True, help='Resume interrupted session')
-def run(models: str | None, tiers: str | None, all_enabled: bool, dry_run: bool, parallel: int, resume: bool) -> None:
+def run(models: str | None, tiers: str | None, all_enabled: bool, dry_run: bool, parallel: int, max_tests: int | None, verbose: bool, resume: bool) -> None:
     """Run adversarial tests against configured models."""
     from llm_red_team.config.loader import ConfigLoader
     from llm_red_team.clients import MockClient, AnthropicClient, OpenAIClient, OllamaClient
@@ -53,16 +130,21 @@ def run(models: str | None, tiers: str | None, all_enabled: bool, dry_run: bool,
             client = MockClient(model_name, model_cfg)
 
     runner = TestRunner(client, parallel=parallel)
-    results = runner.run_all()
-    summary = runner.get_summary()
 
-    console.print(f"\n[bold green]Results:[/bold green]")
-    console.print(f"  Total Tests: {summary['total_tests']}")
-    console.print(f"  Successful: {summary['successful']}")
-    console.print(f"  Failed: {summary['failed']}")
-    console.print(f"  Success Rate: {summary['success_rate']}%")
-    console.print(f"  Avg Latency: {summary['avg_latency_ms']}ms")
-    console.print(f"  Total Tokens: {summary['total_tokens']}")
+    selected = ALL_PROMPTS
+    if tiers:
+        tier_nums = [int(t) for t in tiers.split(",")]
+        selected = [p for p in selected if p["tier"] in tier_nums]
+    if max_tests:
+        selected = selected[:max_tests]
+
+    if verbose:
+        console.print(f"\n[bold]Running {len(selected)} tests against {getattr(client, 'model_id', 'model')}...[/bold]\n")
+        results = _run_live(runner, selected, parallel=parallel, verbose=True)
+    else:
+        results = runner.run_all() if selected == ALL_PROMPTS else _run_subset(runner, selected)
+    summary = runner.get_summary()
+    _print_results(console, summary, results)
 
     if tiers:
         tier_nums = [int(t) for t in tiers.split(",")]
