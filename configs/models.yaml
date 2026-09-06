@@ -38,6 +38,19 @@ models:
     rate_limit: 5
     tags: [local, experimental]
 
+  qwen2_5_3b:
+    type: local
+    provider: ollama
+    model_id: qwen2.5:3b-instruct-q4_K_M
+    endpoint: http://localhost:11434
+    enabled: true
+    max_tokens: 2048
+    temperature: 0.7
+    timeout: 60
+    retry_attempts: 3
+    rate_limit: 5
+    tags: [local, qwen, instruct]
+
   mistral:
     type: local
     provider: ollama
@@ -63,6 +76,19 @@ models:
     retry_attempts: 3
     rate_limit: 10
     tags: [security]
+
+nomic-embed-text:latest:
+    type: local
+    provider: ollama
+    model_id: nomic-embed-text:latest
+    endpoint: http://localhost:11434
+    enabled: true
+    max_tokens: 512
+    temperature: 0.0
+    timeout: 30
+    retry_attempts: 3
+    rate_limit: 5
+    tags: [local, embedding]
 
   custom_model:
     type: api
