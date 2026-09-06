@@ -814,5 +814,30 @@ class TestPromptGuard:
         assert result["would_block_defense"] == "prompt_guard"
 
 
+class TestBenignCorpus:
+    @staticmethod
+    def _load():
+        import json
+        from pathlib import Path
+        path = Path(__file__).resolve().parent.parent / "eval" / "benign_100.jsonl"
+        return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+
+    def test_corpus_has_100_queries(self):
+        assert len(self._load()) == 100
+
+    def test_heuristic_fpr_under_threshold(self):
+        from llm_red_team.defense.normalizer import Normalizer
+        from llm_red_team.defense.strategies import get_all_defenses, INPUT_STAGE
+        norm = Normalizer()
+        defenses = [d for d in get_all_defenses() if d.name in INPUT_STAGE]
+        flagged = 0
+        for row in self._load():
+            text, meta = norm.normalize(row["query"])
+            if any(d.apply(row["query"], "", normalized=text, norm_meta=meta).get("flagged")
+                   for d in defenses):
+                flagged += 1
+        assert flagged <= 2, f"heuristic FPR {flagged}/100 exceeds budget"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

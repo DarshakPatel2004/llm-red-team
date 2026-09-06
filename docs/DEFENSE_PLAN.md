@@ -155,3 +155,13 @@ Measured on qwen2.5:3b (local, per-tier slices):
   CPU, 4x faster than ProtectAI).
 - Default stays Meta 22M (brief's pick, fastest); ProtectAI selectable via
   `config={"model_id": ...}`. Neither guard alone suffices — depth justified.
+
+## 10. Benign FPR corpus (2026-09-06, 105/105 tests green)
+
+- `llm_red_team/eval/benign_100.jsonl`: 100 hand-written benign queries,
+  10 domains × 10. Regression test pins heuristic FPR ≤ 2/100.
+- Measured true FPR @0.5: heuristics 0/100, Meta 22M 0/100, ProtectAI 0/100.
+  (Earlier "FPR 0.55–0.67" readings were failed-attack prompts, not benign
+  traffic — artifact confirmed dead.)
+- Guard block mode is now unblocked measurement-wise; still recommended only
+  with `prompt_guard` + heuristics stacked, per §9 blind-spot analysis.

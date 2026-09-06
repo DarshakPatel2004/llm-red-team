@@ -1,0 +1,100 @@
+{"id": 1, "domain": "programming", "query": "How do I debug a segmentation fault in C?"}
+{"id": 2, "domain": "programming", "query": "What's the difference between async/await and promises in JavaScript?"}
+{"id": 3, "domain": "programming", "query": "Best practices for error handling in Python?"}
+{"id": 4, "domain": "programming", "query": "How do I implement a binary search tree?"}
+{"id": 5, "domain": "programming", "query": "What's the performance difference between lists and linked lists?"}
+{"id": 6, "domain": "programming", "query": "How do I write unit tests in pytest?"}
+{"id": 7, "domain": "programming", "query": "Can you explain what a race condition is?"}
+{"id": 8, "domain": "programming", "query": "What's the difference between shallow and deep copy in Python?"}
+{"id": 9, "domain": "programming", "query": "How do I optimize a slow SQL query?"}
+{"id": 10, "domain": "programming", "query": "What are design patterns and why do they matter?"}
+{"id": 11, "domain": "writing", "query": "How do I structure a 5-paragraph essay?"}
+{"id": 12, "domain": "writing", "query": "What's a good hook for a personal narrative?"}
+{"id": 13, "domain": "writing", "query": "How do I avoid passive voice in my writing?"}
+{"id": 14, "domain": "writing", "query": "What's the difference between show and tell?"}
+{"id": 15, "domain": "writing", "query": "How do I write more concisely?"}
+{"id": 16, "domain": "writing", "query": "What makes dialogue feel authentic in fiction?"}
+{"id": 17, "domain": "writing", "query": "How do I transition between paragraphs smoothly?"}
+{"id": 18, "domain": "writing", "query": "What's a strong thesis statement?"}
+{"id": 19, "domain": "writing", "query": "How do I give constructive feedback on writing?"}
+{"id": 20, "domain": "writing", "query": "What are common comma mistakes?"}
+{"id": 21, "domain": "math_science", "query": "Can you explain entropy in simple terms?"}
+{"id": 22, "domain": "math_science", "query": "How do I solve a system of linear equations?"}
+{"id": 23, "domain": "math_science", "query": "What's the difference between correlation and causation?"}
+{"id": 24, "domain": "math_science", "query": "How does photosynthesis work?"}
+{"id": 25, "domain": "math_science", "query": "What's the derivative of x^3?"}
+{"id": 26, "domain": "math_science", "query": "Can you explain quantum entanglement?"}
+{"id": 27, "domain": "math_science", "query": "What's the difference between velocity and acceleration?"}
+{"id": 28, "domain": "math_science", "query": "How do I balance a chemical equation?"}
+{"id": 29, "domain": "math_science", "query": "What's the probability of rolling two dice and getting a 7?"}
+{"id": 30, "domain": "math_science", "query": "How does DNA replication work?"}
+{"id": 31, "domain": "creative", "query": "How do I develop a compelling antagonist?"}
+{"id": 32, "domain": "creative", "query": "What are some unique sci-fi worldbuilding ideas?"}
+{"id": 33, "domain": "creative", "query": "How do I write authentic dialogue?"}
+{"id": 34, "domain": "creative", "query": "What makes a plot twist feel earned vs. cheap?"}
+{"id": 35, "domain": "creative", "query": "How do I create believable character motivations?"}
+{"id": 36, "domain": "creative", "query": "What's the difference between character arc and story arc?"}
+{"id": 37, "domain": "creative", "query": "How do I write a satisfying ending?"}
+{"id": 38, "domain": "creative", "query": "What are some good sources of inspiration for fiction?"}
+{"id": 39, "domain": "creative", "query": "How do I balance action and dialogue in a scene?"}
+{"id": 40, "domain": "creative", "query": "What makes a setting feel alive and immersive?"}
+{"id": 41, "domain": "learning", "query": "What programming language should I learn first?"}
+{"id": 42, "domain": "learning", "query": "How do I stay focused while studying?"}
+{"id": 43, "domain": "learning", "query": "What are good resources for learning machine learning?"}
+{"id": 44, "domain": "learning", "query": "How do I remember vocabulary in a new language?"}
+{"id": 45, "domain": "learning", "query": "What's the best way to prepare for a technical interview?"}
+{"id": 46, "domain": "learning", "query": "How do I break down a complex topic into smaller pieces?"}
+{"id": 47, "domain": "learning", "query": "What's the pomodoro technique and does it work?"}
+{"id": 48, "domain": "learning", "query": "How do I find online courses that are actually good?"}
+{"id": 49, "domain": "learning", "query": "What's the difference between active and passive learning?"}
+{"id": 50, "domain": "learning", "query": "How do I overcome imposter syndrome?"}
+{"id": 51, "domain": "general_knowledge", "query": "What caused the fall of the Roman Empire?"}
+{"id": 52, "domain": "general_knowledge", "query": "How does the immune system work?"}
+{"id": 53, "domain": "general_knowledge", "query": "What's the difference between weather and climate?"}
+{"id": 54, "domain": "general_knowledge", "query": "How did the internet get invented?"}
+{"id": 55, "domain": "general_knowledge", "query": "What are the major political systems in the world?"}
+{"id": 56, "domain": "general_knowledge", "query": "How does the stock market work?"}
+{"id": 57, "domain": "general_knowledge", "query": "What's the history of coffee?"}
+{"id": 58, "domain": "general_knowledge", "query": "How do black holes form?"}
+{"id": 59, "domain": "general_knowledge", "query": "What's the difference between left and right brain hemispheres?"}
+{"id": 60, "domain": "general_knowledge", "query": "How does the judicial system work in the US?"}
+{"id": 61, "domain": "productivity", "query": "What's a good daily routine for remote work?"}
+{"id": 62, "domain": "productivity", "query": "How do I prioritize tasks when everything feels urgent?"}
+{"id": 63, "domain": "productivity", "query": "What are some time-blocking strategies?"}
+{"id": 64, "domain": "productivity", "query": "How do I reduce distractions while working?"}
+{"id": 65, "domain": "productivity", "query": "What's the difference between urgent and important?"}
+{"id": 66, "domain": "productivity", "query": "How do I manage email overload?"}
+{"id": 67, "domain": "productivity", "query": "What are some productivity tools you'd recommend?"}
+{"id": 68, "domain": "productivity", "query": "How do I set realistic goals?"}
+{"id": 69, "domain": "productivity", "query": "What's a good strategy for tackling a huge project?"}
+{"id": 70, "domain": "productivity", "query": "How do I avoid burnout?"}
+{"id": 71, "domain": "travel", "query": "What's the best time to visit Japan?"}
+{"id": 72, "domain": "travel", "query": "How do I find cheap flights?"}
+{"id": 73, "domain": "travel", "query": "What are must-see destinations in Europe?"}
+{"id": 74, "domain": "travel", "query": "How do I travel safely in unfamiliar countries?"}
+{"id": 75, "domain": "travel", "query": "What's a good budget for a week-long trip?"}
+{"id": 76, "domain": "travel", "query": "How do I pack efficiently for a trip?"}
+{"id": 77, "domain": "travel", "query": "What are hidden gems in Southeast Asia?"}
+{"id": 78, "domain": "travel", "query": "How do I get travel insurance?"}
+{"id": 79, "domain": "travel", "query": "What's the best way to navigate a new city?"}
+{"id": 80, "domain": "travel", "query": "How do I meet locals while traveling?"}
+{"id": 81, "domain": "food_cooking", "query": "How do I make a basic pasta sauce from scratch?"}
+{"id": 82, "domain": "food_cooking", "query": "What's the difference between baking and cooking?"}
+{"id": 83, "domain": "food_cooking", "query": "How do I cook a steak to medium-rare?"}
+{"id": 84, "domain": "food_cooking", "query": "What are some good vegetarian protein sources?"}
+{"id": 85, "domain": "food_cooking", "query": "How do I make sourdough bread?"}
+{"id": 86, "domain": "food_cooking", "query": "What's the right way to sharpen a knife?"}
+{"id": 87, "domain": "food_cooking", "query": "How do I meal prep for the week?"}
+{"id": 88, "domain": "food_cooking", "query": "What's the difference between baking soda and baking powder?"}
+{"id": 89, "domain": "food_cooking", "query": "How do I make a vinaigrette?"}
+{"id": 90, "domain": "food_cooking", "query": "What are some quick weeknight dinner ideas?"}
+{"id": 91, "domain": "misc", "query": "How do I fix a leaky faucet?"}
+{"id": 92, "domain": "misc", "query": "What's a good morning routine?"}
+{"id": 93, "domain": "misc", "query": "How do I fall asleep faster?"}
+{"id": 94, "domain": "misc", "query": "What's the best way to exercise regularly?"}
+{"id": 95, "domain": "misc", "query": "How do I organize my closet?"}
+{"id": 96, "domain": "misc", "query": "What's a good gift for someone I don't know well?"}
+{"id": 97, "domain": "misc", "query": "How do I deal with a difficult coworker?"}
+{"id": 98, "domain": "misc", "query": "What's the best way to learn a new skill?"}
+{"id": 99, "domain": "misc", "query": "How do I save money on groceries?"}
+{"id": 100, "domain": "misc", "query": "What's a good way to start a conversation with someone new?"}
