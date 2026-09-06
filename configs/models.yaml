@@ -15,7 +15,7 @@ models:
   gpt4:
     type: api
     provider: openai
-    model_id: gpt-4
+    model_id: gpt-4o-mini
     api_key: ${OPENAI_API_KEY}
     enabled: true
     max_tokens: 4096
@@ -67,7 +67,7 @@ models:
   gemini:
     type: api
     provider: google
-    model_id: gemini-pro
+    model_id: gemini-3.6-flash
     api_key: ${GOOGLE_API_KEY}
     enabled: false
     max_tokens: 4096
