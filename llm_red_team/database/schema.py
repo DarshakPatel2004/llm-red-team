@@ -77,7 +77,7 @@ Index("idx_results_created", TestResult.created_at)
 
 def get_session(db_url: str = "sqlite:///llm_red_team.db"):
     """Create a database session."""
-    engine = create_engine(db_url)
+    engine = create_engine(db_url, connect_args={"check_same_thread": False})
     Base.metadata.create_all(engine)
     SessionLocal = sessionmaker(bind=engine)
     return SessionLocal()

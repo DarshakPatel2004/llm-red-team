@@ -34,12 +34,11 @@ class TestRunner:
         self._session = None
 
     def _get_session(self):
-        if self.db_url:
-            try:
-                self._session = get_session(self.db_url)
-            except Exception:
-                self._session = None
-        return self._session
+        try:
+            session = get_session(self.db_url)
+            return session
+        except Exception:
+            return None
 
     def run_prompt(self, prompt: dict[str, Any]) -> dict[str, Any]:
         """Execute a single prompt against the model with retry logic."""
@@ -92,26 +91,31 @@ class TestRunner:
 
     def _persist(self, result: dict[str, Any]) -> None:
         """Persist result to database if available."""
+        if not result.get("prompt_id"):
+            return
         session = self._get_session()
-        if session and result.get("prompt_id"):
-            try:
-                db_result = TestResult(
-                    id=result["prompt_id"],
-                    model_id=getattr(self.client, "model_id", "unknown"),
-                    prompt_id=result["prompt_id"],
-                    attack_category=result["category"],
-                    tier=result["tier"],
-                    prompt_text=result["prompt_text"][:500],
-                    response=result.get("response", "")[:2000],
-                    tokens_used=result.get("tokens_used", 0),
-                    latency_ms=result.get("latency_ms", 0),
-                    success=result.get("success", False),
-                    vulnerability_type=result.get("vulnerability_type"),
-                )
-                session.add(db_result)
-                session.commit()
-            except Exception:
-                pass
+        if not session:
+            return
+        try:
+            db_result = TestResult(
+                id=result["prompt_id"],
+                model_id=getattr(self.client, "model_id", "unknown"),
+                prompt_id=result["prompt_id"],
+                attack_category=result["category"],
+                tier=result["tier"],
+                prompt_text=result["prompt_text"][:500],
+                response=result.get("response", "")[:2000],
+                tokens_used=result.get("tokens_used", 0),
+                latency_ms=result.get("latency_ms", 0),
+                success=result.get("success", False),
+                vulnerability_type=result.get("vulnerability_type"),
+            )
+            session.add(db_result)
+            session.commit()
+        except Exception:
+            pass
+        finally:
+            session.close()
 
     def run_all(self) -> list[dict[str, Any]]:
         """Run all prompts against the model."""

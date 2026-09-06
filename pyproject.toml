@@ -38,7 +38,8 @@ llm-red-team = "llm_red_team.api.cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["llm_red_team/tests"]
-addopts = ["-v", "--tb=short", "--cov=llm_red_team", "--cov-report=term-missing"]
+addopts = ["-v", "--tb=short", "--cov=llm_red_team", "--cov-report=term-missing", "--disable-warnings"]
+filterwarnings = ["ignore::ResourceWarning"]
 
 [tool.ruff]
 line-length = 120
