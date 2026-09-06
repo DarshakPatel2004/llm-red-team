@@ -72,13 +72,27 @@ class PromptGuardDefense(DefenseStrategy):
             if " ".join(words[i:i + WINDOW_TOKENS]).strip()
         ]
 
-    @staticmethod
-    def _malicious_score(result: dict) -> float:
+    _MALICIOUS_LABELS = frozenset({
+        "MALICIOUS", "JAILBREAK", "INJECTION", "UNSAFE", "POSITIVE",
+        "LABEL_1", "1", "TRUE",
+    })
+    _BENIGN_LABELS = frozenset({
+        "BENIGN", "SAFE", "NEGATIVE", "LABEL_0", "0", "FALSE",
+    })
+
+    @classmethod
+    def _malicious_score(cls, result: dict) -> float:
         label = str(result.get("label", "")).upper()
         score = float(result.get("score", 0.0))
-        if "MALIC" in label or "JAILBREAK" in label or "INJECT" in label:
+        if label in cls._MALICIOUS_LABELS or (
+            label not in cls._BENIGN_LABELS
+            and ("MALIC" in label or "JAILBREAK" in label or "INJECT" in label)
+        ):
             return score
-        return 1.0 - score
+        if label in cls._BENIGN_LABELS:
+            return 1.0 - score
+        warnings.warn(f"Unknown guard label {label!r}; assuming positive-class convention")
+        return score
 
     def _fallback(self, prompt: str) -> dict[str, Any]:
         from llm_red_team.defense.strategies import InputSanitizationDefense

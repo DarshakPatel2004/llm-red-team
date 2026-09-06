@@ -758,6 +758,15 @@ class TestPromptGuard:
         assert out["malicious"] is False
         assert abs(out["score"] - 0.10) < 1e-6
 
+    def test_label_index_convention(self):
+        # Meta PG2-22M ships generic LABEL_0/LABEL_1 heads: 1 = malicious.
+        g = self._guard(pipeline=self._FakePipe("LABEL_1", 0.997))
+        assert g.classify("attack")["malicious"] is True
+        g = self._guard(pipeline=self._FakePipe("LABEL_0", 0.999))
+        out = g.classify("benign")
+        assert out["malicious"] is False
+        assert abs(out["score"] - 0.001) < 1e-6
+
     def test_sliding_window_segments(self):
         pipe = self._FakePipe("BENIGN", 0.99)
         g = self._guard(pipeline=pipe)

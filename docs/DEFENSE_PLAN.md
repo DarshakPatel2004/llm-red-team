@@ -133,3 +133,25 @@ Measured on qwen2.5:3b (local, per-tier slices):
   exactly where Phase A normalization is strongest. Layers are complementary:
   guard catches direct injections, normalizer catches encoded ones.
 - Rule: no `prompt_guard` block mode until a benign FPR set exists (still TODO).
+
+## 9. Meta 22M head-to-head (2026-09-06, access granted to Darshak00001)
+
+- Setup note: approval is per-account — token must belong to the granted
+  account (`Darshak00001`, not `darshakpatel24`); each shell needs
+  `$env:HF_TOKEN` set inline (registry `setx` alone is not picked up by
+  reused shells).
+- Bug found and fixed: 22M ships generic `LABEL_0`/`LABEL_1` heads
+  (1 = malicious). The first mapper inverted scores (canonical injection
+  scored 0.002). `_malicious_score` now uses explicit label sets +
+  regression test.
+- 112-prompt results @0.5 (17 successful attacks):
+  heuristic P=0.20 R=0.176 FPR=0.126; Meta22M P=0.214 R=0.176 FPR=0.116;
+  both P=0.167 R=0.235 FPR=0.211. (ProtectAI, for contrast: R=0.765,
+  FPR=0.674.)
+- Meta22M flags only 14/112; its 14 successful-attack misses are extraction
+  rephrasings, persona jailbreaks (DAN ≈ 0.09), obfuscation, and t5-008 —
+  i.e. precisely the classes Phase A heuristics cover. Operating points:
+  ProtectAI = aggressive/recall, Meta22M = conservative/precision (~35ms on
+  CPU, 4x faster than ProtectAI).
+- Default stays Meta 22M (brief's pick, fastest); ProtectAI selectable via
+  `config={"model_id": ...}`. Neither guard alone suffices — depth justified.
