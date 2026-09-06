@@ -23,14 +23,36 @@ def main() -> None:
     pass
 
 
-def _print_results(console, summary, results):
+def _print_results(console, summary, results=None):
     console.print(f"\n[bold green]Results:[/bold green]")
     console.print(f"  Total Tests: {summary['total_tests']}")
-    console.print(f"  Successful: {summary['successful']}")
-    console.print(f"  Failed: {summary['failed']}")
-    console.print(f"  Success Rate: {summary['success_rate']}%")
+    console.print(f"  Transport OK: {summary['successful']} ({summary['success_rate']}%)")
+    console.print(f"  Transport Failed: {summary['failed']}")
     console.print(f"  Avg Latency: {summary['avg_latency_ms']}ms")
     console.print(f"  Total Tokens: {summary['total_tokens']}")
+    if "vulnerable" in summary:
+        rate = summary.get("vulnerability_rate", 0)
+        blocked = summary.get("blocked", 0)
+        console.print(
+            f"  [bold red]Attack Succeeded (vulnerable): {summary['vulnerable']} ({rate}%)[/bold red]"
+        )
+        console.print(
+            f"  [bold green]Attack Blocked: {blocked} ({summary.get('blocked_rate', 0)}%)[/bold green]"
+        )
+        console.print(f"  Neutral/Clarification: {summary.get('neutral', 0)}")
+
+
+def _verdict_tag(r):
+    outcome = r.get("outcome", "evaded")
+    colors = {
+        "complied": "[bold red]COMPLIED[/bold red]",
+        "partial": "[yellow]PARTIAL[/yellow]",
+        "clarified": "[cyan]clarified[/cyan]",
+        "refused": "[bold green]REFUSED[/bold green]",
+        "evaded": "[dim]evaded[/dim]",
+        "error": "[red]ERROR[/red]",
+    }
+    return colors.get(outcome, outcome)
 
 
 def _run_subset(runner, prompts):
@@ -54,7 +76,8 @@ def _print_test(r, verbose=False):
             return t.encode("utf-8", errors="replace").decode("utf-8")
 
     status = "[green]PASS[/green]" if r["success"] else "[red]FAIL[/red]"
-    line = f"[{status}] {r['prompt_id']} | tier {r['tier']} | {r['attack_type']} | {r['category']}"
+    verdict = _verdict_tag(r)
+    line = f"[{status}] {r['prompt_id']} | tier {r['tier']} | {r['attack_type']} | {r['category']} | {verdict}"
     if verbose:
         console.print(line)
         console.print(f"  [bold]Prompt:[/bold] {_safe(r['prompt_text'], 300)}")
@@ -99,12 +122,17 @@ def _run_live(runner, prompts, parallel=1, verbose=False):
 @click.option('--max-tests', default=None, type=int, help='Limit number of tests to run')
 @click.option('--verbose', is_flag=True, help='Show each prompt and response')
 @click.option('--resume', is_flag=True, help='Resume interrupted session')
-def run(models: str | None, tiers: str | None, all_enabled: bool, dry_run: bool, parallel: int, max_tests: int | None, verbose: bool, resume: bool) -> None:
+@click.option('--judge-model', default=None, help='Model name used as external judge (default: heuristic)')
+@click.option('--report', default=None, help='Export report: json, md, or html (default: none)')
+@click.option('--report-path', default=None, help='Report output path (default: reports/run-<model>-<ts>)')
+def run(models: str | None, tiers: str | None, all_enabled: bool, dry_run: bool, parallel: int, max_tests: int | None, verbose: bool, resume: bool, judge_model: str | None, report: str | None, report_path: str | None) -> None:
     """Run adversarial tests against configured models."""
     from llm_red_team.config.loader import ConfigLoader
     from llm_red_team.clients import MockClient, AnthropicClient, OpenAIClient, OllamaClient
     from llm_red_team.engine.runner import TestRunner, BatchExecutor
     from llm_red_team.attacks import ALL_PROMPTS
+    from llm_red_team.analysis.judge import AttackJudge
+    from llm_red_team.analysis.report import build_report_data, export_report
 
     config = ConfigLoader()
     cfg = config.load()
@@ -129,7 +157,24 @@ def run(models: str | None, tiers: str | None, all_enabled: bool, dry_run: bool,
         else:
             client = MockClient(model_name, model_cfg)
 
-    runner = TestRunner(client, parallel=parallel)
+    judge = AttackJudge()
+    if judge_model:
+        jm_cfg = cfg["models"].get(judge_model)
+        if jm_cfg:
+            jprovider = jm_cfg.get("provider", "")
+            if jprovider == "ollama":
+                judge = AttackJudge(OllamaClient(jm_cfg["model_id"], jm_cfg))
+            elif jprovider == "openai":
+                judge = AttackJudge(OpenAIClient(jm_cfg["model_id"], jm_cfg))
+            elif jprovider == "anthropic":
+                judge = AttackJudge(AnthropicClient(jm_cfg["model_id"], jm_cfg))
+            else:
+                judge = AttackJudge(MockClient(judge_model, jm_cfg))
+            console.print(f"[dim]Using {jm_cfg.get('model_id', judge_model)} as external judge[/dim]")
+        else:
+            console.print(f"[yellow]Judge model '{judge_model}' not found; falling back to heuristic[/yellow]")
+
+    runner = TestRunner(client, parallel=parallel, judge=judge)
 
     selected = ALL_PROMPTS
     if tiers:
@@ -153,7 +198,20 @@ def run(models: str | None, tiers: str | None, all_enabled: bool, dry_run: bool,
         for tier in tier_nums:
             if tier in by_tier:
                 data = by_tier[tier]
-                console.print(f"  Tier {tier}: {data['count']} tests, {data['success']} successful")
+                console.print(
+                    f"  Tier {tier}: {data['count']} tests, {data['success']} ok, "
+                    f"[red]{data['vulnerable']} vulnerable[/red], "
+                    f"[green]{data['blocked']} blocked[/green]"
+                )
+
+    model_label = getattr(client, "model_id", "model")
+    if report:
+        import datetime as _dt
+        fmt = report.lower()
+        path = report_path or f"reports/run-{model_label}-{_dt.datetime.now().strftime('%Y%m%d-%H%M%S')}"
+        data = build_report_data(runner, model_label)
+        final = export_report(data, path, fmt)
+        console.print(f"[green]Report saved to {final}[/green]")
 
     if resume:
         console.print("[yellow]Resume mode detected - loading previous session[/yellow]")
@@ -207,43 +265,59 @@ def models_add(name: str, type: str, provider: str, endpoint: str | None, model_
 
 
 @main.command()
-@click.option('--format', default='json', help='Output format')
+@click.option('--models', default=None, help='Comma-separated list of models')
+@click.option('--format', default='html', help='Output format: json, md, html')
 @click.option('--output', default=None, help='Output file path')
-def report(format: str, output: str | None) -> None:
-    """Generate analysis report."""
+@click.option('--parallel', default=2, type=int, help='Parallel workers')
+def report(models: str | None, format: str, output: str | None, parallel: int) -> None:
+    """Run tests and generate a full security report."""
     from llm_red_team.engine.runner import TestRunner
-    from llm_red_team.clients import MockClient
-    from llm_red_team.attribution.engine import AttributionEngine
-    from llm_red_team.analysis.engine import AnalysisEngine
+    from llm_red_team.clients import MockClient, AnthropicClient, OpenAIClient, OllamaClient
+    from llm_red_team.analysis.judge import AttackJudge
+    from llm_red_team.analysis.report import build_report_data, export_report
     from llm_red_team.config.loader import ConfigLoader
 
     config = ConfigLoader()
-    client = MockClient("test", config.load()["models"]["claude"])
-    runner = TestRunner(client)
-    results = runner.run_all()
+    cfg = config.load()
+
+    if models:
+        model_name = models.split(",")[0].strip()
+        model_cfg = cfg["models"].get(model_name)
+        if not model_cfg:
+            console.print(f"[red]Model '{model_name}' not found in configuration[/red]")
+            return
+        provider = model_cfg.get("provider", "")
+        if provider == "ollama":
+            client = OllamaClient(model_cfg["model_id"], model_cfg)
+        elif provider == "openai":
+            client = OpenAIClient(model_cfg["model_id"], model_cfg)
+        elif provider == "anthropic":
+            client = AnthropicClient(model_cfg["model_id"], model_cfg)
+        else:
+            client = MockClient(model_name, model_cfg)
+    else:
+        model_name = "mock"
+        client = MockClient("mock", cfg["models"]["claude"])
+
+    runner = TestRunner(client, parallel=parallel, judge=AttackJudge())
+    runner.run_all()
     summary = runner.get_summary()
 
-    attribution = AttributionEngine()
-    attribution_report = attribution.generate_attribution_report(results)
-    analysis = AnalysisEngine()
-    matrix = analysis.generate_vulnerability_matrix(results, "test-model")
-
     console.print(f"[bold]Attack Summary:[/bold] {summary['total_tests']} tests")
-    console.print(f"[bold]Success Rate:[/bold] {summary['success_rate']}%")
-    console.print(f"[bold]Security Score:[/bold] {matrix['security_score']}")
-    console.print(f"[bold]Vulnerability Categories:[/bold] {len(attribution_report['category_counts'])}")
+    console.print(f"[bold]Transport Success:[/bold] {summary['success_rate']}%")
+    console.print(
+        f"[bold]Vulnerable:[/bold] {summary.get('vulnerable', 0)} "
+        f"({summary.get('vulnerability_rate', 0)}%)"
+    )
+    console.print(
+        f"[bold]Blocked:[/bold] {summary.get('blocked', 0)} "
+        f"({summary.get('blocked_rate', 0)}%)"
+    )
 
-    if output:
-        report_data = {
-            "summary": summary,
-            "attribution": attribution_report,
-            "matrix": matrix,
-            "results": results,
-        }
-        if format == "json":
-            with open(output, 'w') as f:
-                json.dump(report_data, f, indent=2)
-        console.print(f"[green]Report saved to {output}[/green]")
+    data = build_report_data(runner, model_name)
+    path = output or f"reports/{model_name}-report"
+    final = export_report(data, path, format)
+    console.print(f"[green]Report saved to {final}[/green]")
 
 
 @main.command()

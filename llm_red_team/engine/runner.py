@@ -3,11 +3,13 @@ from __future__ import annotations
 import time
 import json
 import os
+import uuid
 from typing import Any
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from llm_red_team.clients.base import LLMClient
 from llm_red_team.attacks import ALL_PROMPTS
 from llm_red_team.database.schema import get_session, TestResult
+from llm_red_team.analysis.judge import AttackJudge, EVADED
 
 
 class TestRunner:
@@ -15,6 +17,7 @@ class TestRunner:
 
     Supports sequential and parallel execution with
     full error recovery, timeout handling, and result persistence.
+    Every result is scored by an AttackJudge into a security verdict.
     """
 
     def __init__(
@@ -24,13 +27,16 @@ class TestRunner:
         timeout: int = 30,
         parallel: int = 1,
         db_url: str | None = None,
+        judge: AttackJudge | None = None,
     ) -> None:
         self.client = client
         self.max_retries = max_retries
         self.timeout = timeout
         self.parallel = parallel
         self.db_url = db_url or "sqlite:///llm_red_team.db"
+        self.judge = judge or AttackJudge()
         self.results: list[dict[str, Any]] = []
+        self.run_id = uuid.uuid4().hex
         self._session = None
 
     def _get_session(self):
@@ -69,6 +75,7 @@ class TestRunner:
                     "attempt": attempt + 1,
                     "error": None,
                 }
+                self._score_result(prompt, result)
                 self._persist(result)
                 return result
             except Exception as e:
@@ -89,6 +96,18 @@ class TestRunner:
         self._persist(result)
         return result
 
+    def _score_result(self, prompt: dict[str, Any], result: dict[str, Any]) -> None:
+        """Attach a security verdict to a transport-successful result."""
+        try:
+            verdict = self.judge.judge(prompt, result)
+            result.update(verdict)
+        except Exception:
+            result.setdefault("outcome", EVADED)
+            result.setdefault("vulnerable", False)
+            result.setdefault("attack_detected", False)
+            result.setdefault("signals", [])
+            result.setdefault("confidence", 0.5)
+
     def _persist(self, result: dict[str, Any]) -> None:
         """Persist result to database if available."""
         if not result.get("prompt_id"):
@@ -98,7 +117,8 @@ class TestRunner:
             return
         try:
             db_result = TestResult(
-                id=result["prompt_id"],
+                id=uuid.uuid4().hex,
+                run_id=self.run_id,
                 model_id=getattr(self.client, "model_id", "unknown"),
                 prompt_id=result["prompt_id"],
                 attack_category=result["category"],
@@ -109,6 +129,13 @@ class TestRunner:
                 latency_ms=result.get("latency_ms", 0),
                 success=result.get("success", False),
                 vulnerability_type=result.get("vulnerability_type"),
+                extra_metadata={
+                    "outcome": result.get("outcome", EVADED),
+                    "vulnerable": result.get("vulnerable", False),
+                    "attack_detected": result.get("attack_detected", False),
+                    "signals": result.get("signals", []),
+                    "confidence": result.get("confidence", 0.0),
+                },
             )
             session.add(db_result)
             session.commit()
@@ -158,13 +185,16 @@ class TestRunner:
         return batch_results
 
     def get_summary(self) -> dict[str, Any]:
-        """Generate a summary of all results."""
+        """Generate a summary of all results including security verdicts."""
         total = len(self.results)
         successful = sum(1 for r in self.results if r["success"])
         failed = total - successful
         avg_latency = (
             sum(r["latency_ms"] for r in self.results if r["latency_ms"]) / max(successful, 1)
         )
+        vulnerable = sum(1 for r in self.results if r.get("vulnerable"))
+        blocked = sum(1 for r in self.results if r.get("blocked"))
+        neutral = sum(1 for r in self.results if r.get("outcome") == "clarified")
         return {
             "total_tests": total,
             "successful": successful,
@@ -173,27 +203,42 @@ class TestRunner:
             "avg_latency_ms": round(avg_latency, 2),
             "total_tokens": sum(r["tokens_used"] for r in self.results),
             "parallel_workers": self.parallel,
+            "vulnerable": vulnerable,
+            "vulnerability_rate": round(vulnerable / total * 100, 2) if total > 0 else 0,
+            "blocked": blocked,
+            "blocked_rate": round(blocked / total * 100, 2) if total > 0 else 0,
+            "neutral": neutral,
         }
 
     def get_results_by_tier(self) -> dict[int, dict[str, Any]]:
-        """Group results by tier."""
+        """Group results by tier with verdict breakdowns."""
         by_tier: dict[int, list[dict[str, Any]]] = {}
         for r in self.results:
             tier = r["tier"]
             by_tier.setdefault(tier, []).append(r)
         return {
-            tier: {"count": len(r), "success": sum(1 for x in r if x["success"])}
+            tier: {
+                "count": len(r),
+                "success": sum(1 for x in r if x["success"]),
+                "vulnerable": sum(1 for x in r if x.get("vulnerable")),
+                "blocked": sum(1 for x in r if x.get("blocked")),
+            }
             for tier, r in by_tier.items()
         }
 
     def get_results_by_attack_type(self) -> dict[str, dict[str, Any]]:
-        """Group results by attack type."""
+        """Group results by attack type with verdict breakdowns."""
         by_type: dict[str, list[dict[str, Any]]] = {}
         for r in self.results:
-            atype = r["attack_type"]
+            atype = r.get("attack_type") or "error"
             by_type.setdefault(atype, []).append(r)
         return {
-            atype: {"count": len(r), "success": sum(1 for x in r if x["success"])}
+            atype: {
+                "count": len(r),
+                "success": sum(1 for x in r if x["success"]),
+                "vulnerable": sum(1 for x in r if x.get("vulnerable")),
+                "blocked": sum(1 for x in r if x.get("blocked")),
+            }
             for atype, r in by_type.items()
         }
 

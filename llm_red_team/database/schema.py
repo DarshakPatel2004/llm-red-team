@@ -7,6 +7,7 @@ from sqlalchemy import (
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
 from datetime import datetime
+import uuid
 
 Base = declarative_base()
 
@@ -35,7 +36,8 @@ class Prompt(Base):
 
 class TestResult(Base):
     __tablename__ = "test_results"
-    id = Column(String(36), primary_key=True)
+    id = Column(String(36), primary_key=True, default=lambda: uuid.uuid4().hex)
+    run_id = Column(String(36), index=True)
     model_id = Column(String(36), ForeignKey("models.id"))
     prompt_id = Column(String(36), ForeignKey("prompts.id"))
     attack_category = Column(String(50))
@@ -75,9 +77,24 @@ Index("idx_results_vuln_type", TestResult.vulnerability_type)
 Index("idx_results_created", TestResult.created_at)
 
 
+def _migrate_add_column(engine) -> None:
+    """Add run_id to pre-existing test_results tables (SQLite ALTER)."""
+    from sqlalchemy import inspect
+    engine = engine.connect().execution_options(isolation_level="AUTOCOMMIT")
+    try:
+        cols = [c["name"] for c in inspect(engine).get_columns("test_results")]
+        if "run_id" not in cols:
+            engine.exec_driver_sql("ALTER TABLE test_results ADD COLUMN run_id VARCHAR(36)")
+    except Exception as ex:
+        print(f"[migrate] run_id column: {ex}")
+    finally:
+        engine.close()
+
+
 def get_session(db_url: str = "sqlite:///llm_red_team.db"):
     """Create a database session."""
     engine = create_engine(db_url, connect_args={"check_same_thread": False})
     Base.metadata.create_all(engine)
+    _migrate_add_column(engine)
     SessionLocal = sessionmaker(bind=engine)
     return SessionLocal()

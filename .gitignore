@@ -66,6 +66,10 @@ test_output/
 results/
 output/
 
+# Reports (keep sample report committed)
+reports/*
+!reports/qwen2_5_3b-final.html
+
 # Config secrets
 configs/secrets/
 *.key
