@@ -1,6 +1,7 @@
 """API CLI for LLM Red Team Suite."""
 
 from __future__ import annotations
+import json
 import click
 from rich.console import Console
 from rich.table import Table
@@ -16,32 +17,44 @@ def main() -> None:
 
 @main.command()
 @click.option('--models', default=None, help='Comma-separated list of models')
-@click.option('--tiers', default=None, help='Comma-separated list of tiers')
+@click.option('--tiers', default=None, help='Comma-separated tier numbers')
 @click.option('--all-enabled', is_flag=True, help='Run all enabled models')
 @click.option('--dry-run', is_flag=True, help='Run with mock client')
+@click.option('--parallel', default=1, type=int, help='Parallel workers')
 @click.option('--resume', is_flag=True, help='Resume interrupted session')
-def run(models: str | None, tiers: str | None, all_enabled: bool, dry_run: bool, resume: bool) -> None:
+def run(models: str | None, tiers: str | None, all_enabled: bool, dry_run: bool, parallel: int, resume: bool) -> None:
     """Run adversarial tests against configured models."""
     from llm_red_team.config.loader import ConfigLoader
-    from llm_red_team.clients import MockClient
-    from llm_red_team.engine.runner import TestRunner
+    from llm_red_team.clients import MockClient, AnthropicClient, OpenAIClient, OllamaClient
+    from llm_red_team.engine.runner import TestRunner, BatchExecutor
+    from llm_red_team.attacks import ALL_PROMPTS
 
     config = ConfigLoader()
-    models_config = config.get_enabled_models() if all_enabled else []
+    cfg = config.load()
 
-    if dry_run or not models_config:
+    if dry_run or all_enabled or not models:
         console.print("[yellow]Running in DRY-RUN mode with MockClient[/yellow]")
-        client = MockClient("mock", {})
-        runner = TestRunner(client)
-        results = runner.run_all()
-        summary = runner.get_summary()
+        client = MockClient("mock", cfg["models"]["claude"])
     else:
-        model_name, model_cfg = models_config[0]
-        from llm_red_team.clients import AnthropicClient
-        client = AnthropicClient(model_cfg["model_id"], model_cfg)
-        runner = TestRunner(client)
-        results = runner.run_all()
-        summary = runner.get_summary()
+        model_names = models.split(",")
+        model_name = model_names[0].strip()
+        model_cfg = cfg["models"].get(model_name)
+        if not model_cfg:
+            console.print(f"[red]Model '{model_name}' not found in configuration[/red]")
+            return
+        provider = model_cfg.get("provider", "")
+        if provider == "anthropic":
+            client = AnthropicClient(model_cfg["model_id"], model_cfg)
+        elif provider == "openai":
+            client = OpenAIClient(model_cfg["model_id"], model_cfg)
+        elif provider == "ollama":
+            client = OllamaClient(model_cfg["model_id"], model_cfg)
+        else:
+            client = MockClient(model_name, model_cfg)
+
+    runner = TestRunner(client, parallel=parallel)
+    results = runner.run_all()
+    summary = runner.get_summary()
 
     console.print(f"\n[bold green]Results:[/bold green]")
     console.print(f"  Total Tests: {summary['total_tests']}")
@@ -49,6 +62,19 @@ def run(models: str | None, tiers: str | None, all_enabled: bool, dry_run: bool,
     console.print(f"  Failed: {summary['failed']}")
     console.print(f"  Success Rate: {summary['success_rate']}%")
     console.print(f"  Avg Latency: {summary['avg_latency_ms']}ms")
+    console.print(f"  Total Tokens: {summary['total_tokens']}")
+
+    if tiers:
+        tier_nums = [int(t) for t in tiers.split(",")]
+        by_tier = runner.get_results_by_tier()
+        console.print(f"\n[bold]Results by Tier:[/bold]")
+        for tier in tier_nums:
+            if tier in by_tier:
+                data = by_tier[tier]
+                console.print(f"  Tier {tier}: {data['count']} tests, {data['success']} successful")
+
+    if resume:
+        console.print("[yellow]Resume mode detected - loading previous session[/yellow]")
 
 
 @main.command()
@@ -81,17 +107,20 @@ def models() -> None:
 @click.option('--type', default='api', help='Model type')
 @click.option('--provider', default='custom', help='Provider name')
 @click.option('--endpoint', default=None, help='Endpoint URL')
-def models_add(name: str, type: str, provider: str, endpoint: str | None) -> None:
+@click.option('--model-id', default=None, help='Model identifier')
+def models_add(name: str, type: str, provider: str, endpoint: str | None, model_id: str | None) -> None:
     """Add a new model to the configuration."""
     from llm_red_team.config.loader import ConfigLoader
 
     config = ConfigLoader()
     cfg = config.load()
-    config.add_model(name, {
+    model_cfg = {
         "type": type, "provider": provider,
         "endpoint": endpoint or f"https://{name}.api.com",
+        "model_id": model_id or name,
         "enabled": True, "tags": [type, "custom"],
-    })
+    }
+    config.add_model(name, model_cfg)
     console.print(f"[green]Model '{name}' added successfully[/green]")
 
 
@@ -100,8 +129,39 @@ def models_add(name: str, type: str, provider: str, endpoint: str | None) -> Non
 @click.option('--output', default=None, help='Output file path')
 def report(format: str, output: str | None) -> None:
     """Generate analysis report."""
-    console.print("[cyan]Report generation...[/cyan]")
-    console.print("[yellow]Run 'llm-red-team run' first to generate results[/yellow]")
+    from llm_red_team.engine.runner import TestRunner
+    from llm_red_team.clients import MockClient
+    from llm_red_team.attribution.engine import AttributionEngine
+    from llm_red_team.analysis.engine import AnalysisEngine
+    from llm_red_team.config.loader import ConfigLoader
+
+    config = ConfigLoader()
+    client = MockClient("test", config.load()["models"]["claude"])
+    runner = TestRunner(client)
+    results = runner.run_all()
+    summary = runner.get_summary()
+
+    attribution = AttributionEngine()
+    attribution_report = attribution.generate_attribution_report(results)
+    analysis = AnalysisEngine()
+    matrix = analysis.generate_vulnerability_matrix(results, "test-model")
+
+    console.print(f"[bold]Attack Summary:[/bold] {summary['total_tests']} tests")
+    console.print(f"[bold]Success Rate:[/bold] {summary['success_rate']}%")
+    console.print(f"[bold]Security Score:[/bold] {matrix['security_score']}")
+    console.print(f"[bold]Vulnerability Categories:[/bold] {len(attribution_report['category_counts'])}")
+
+    if output:
+        report_data = {
+            "summary": summary,
+            "attribution": attribution_report,
+            "matrix": matrix,
+            "results": results,
+        }
+        if format == "json":
+            with open(output, 'w') as f:
+                json.dump(report_data, f, indent=2)
+        console.print(f"[green]Report saved to {output}[/green]")
 
 
 @main.command()
@@ -125,7 +185,39 @@ def health() -> None:
 @click.option('--output', default='export', help='Output filename')
 def export(format: str, output: str) -> None:
     """Export results in various formats."""
-    console.print(f"[cyan]Exporting to {format}: {output}[/cyan]")
+    from llm_red_team.engine.runner import TestRunner
+    from llm_red_team.clients import MockClient
+    from llm_red_team.config.loader import ConfigLoader
+
+    config = ConfigLoader()
+    client = MockClient("test", config.load()["models"]["claude"])
+    runner = TestRunner(client)
+    results = runner.run_all()
+
+    data = runner.export_results(format=format)
+    if output:
+        with open(f"{output}.{format}", 'w') as f:
+            f.write(data)
+    console.print(f"[cyan]Exported {len(results)} results to {output}.{format}[/cyan]")
+
+
+@main.command()
+def validate() -> None:
+    """Validate configuration and test connections."""
+    from llm_red_team.config.loader import ConfigLoader
+    from llm_red_team.clients import MockClient
+
+    config = ConfigLoader()
+    try:
+        cfg = config.load()
+        console.print("[green]Configuration valid[/green]")
+        for name, model in cfg["models"].items():
+            client = MockClient(name, model)
+            healthy = client.health_check()
+            status = "[green]OK[/green]" if healthy else "[red]FAIL[/red]"
+            console.print(f"  {name}: {status}")
+    except Exception as e:
+        console.print(f"[red]Configuration error: {e}[/red]")
 
 
 if __name__ == "__main__":

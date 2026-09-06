@@ -48,7 +48,7 @@ class TestResult(Base):
     severity_score = Column(Float)
     vulnerability_type = Column(String(50))
     root_cause = Column(String(100))
-    metadata = Column(JSON, default=dict)
+    extra_metadata = Column(JSON, default=dict)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     model = relationship("Model", backref="test_results")
