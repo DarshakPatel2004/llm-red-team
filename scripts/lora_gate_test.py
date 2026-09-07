@@ -70,7 +70,7 @@ def do_train() -> None:
     import torch
     from datasets import Dataset
     from transformers import (AutoModelForCausalLM, AutoTokenizer,
-                              TrainingArguments)
+                              BitsAndBytesConfig, TrainingArguments)
     from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
     from trl import SFTTrainer
 
@@ -80,9 +80,11 @@ def do_train() -> None:
 
     tok = AutoTokenizer.from_pretrained(BASE_MODEL, use_fast=True)
     tok.pad_token = tok.eos_token
+    quant = BitsAndBytesConfig(load_in_4bit=True,
+                               bnb_4bit_compute_dtype=torch.bfloat16)
     model = AutoModelForCausalLM.from_pretrained(
-        BASE_MODEL, load_in_4bit=True, device_map="auto",
-        torch_dtype=torch.bfloat16)
+        BASE_MODEL, quantization_config=quant, device_map="auto",
+        dtype=torch.bfloat16)
     model = prepare_model_for_kbit_training(model)
     model = get_peft_model(model, LoraConfig(**LORA_CFG))
 
@@ -114,13 +116,16 @@ def do_train() -> None:
 
 def do_spotcheck() -> None:
     import torch
-    from transformers import AutoModelForCausalLM, AutoTokenizer
+    from transformers import (AutoModelForCausalLM, AutoTokenizer,
+                              BitsAndBytesConfig)
     from peft import PeftModel
 
     tok = AutoTokenizer.from_pretrained(BASE_MODEL, use_fast=True)
+    quant = BitsAndBytesConfig(load_in_4bit=True,
+                               bnb_4bit_compute_dtype=torch.bfloat16)
     base = AutoModelForCausalLM.from_pretrained(
-        BASE_MODEL, load_in_4bit=True, device_map="auto",
-        torch_dtype=torch.bfloat16)
+        BASE_MODEL, quantization_config=quant, device_map="auto",
+        dtype=torch.bfloat16)
     model = PeftModel.from_pretrained(base, OUT_DIR + "/adapter")
     for p in SPOT_PROBES:
         ids = tok(f"### Instruction:\n{p}\n\n### Response:\n",
