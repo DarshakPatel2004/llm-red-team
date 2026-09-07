@@ -70,9 +70,9 @@ def do_train() -> None:
     import torch
     from datasets import Dataset
     from transformers import (AutoModelForCausalLM, AutoTokenizer,
-                              BitsAndBytesConfig, TrainingArguments)
+                              BitsAndBytesConfig)
     from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
-    from trl import SFTTrainer
+    from trl import SFTTrainer, SFTConfig
 
     assert torch.cuda.is_available(), "needs a CUDA GPU (Colab T4)"
     rows = load_pairs(DATA_PATH)
@@ -93,14 +93,13 @@ def do_train() -> None:
                 f"{r['chosen_refusal']}{tok.eos_token}")
 
     ds = Dataset.from_list([{"text": fmt(r)} for r in rows])
-    args = TrainingArguments(
+    args = SFTConfig(
         output_dir=OUT_DIR, num_train_epochs=TRAIN_CFG["epochs"],
         learning_rate=TRAIN_CFG["lr"], per_device_train_batch_size=TRAIN_CFG["batch"],
         gradient_accumulation_steps=TRAIN_CFG["grad_accum"], logging_steps=5,
         save_steps=50, save_total_limit=1, bf16=True, seed=SEED,
-        report_to="none")
-    SFTTrainer(model=model, train_dataset=ds, args=args,
-               max_seq_length=TRAIN_CFG["max_len"]).train()
+        max_seq_length=TRAIN_CFG["max_len"], report_to="none")
+    SFTTrainer(model=model, train_dataset=ds, args=args).train()
     model.save_pretrained(OUT_DIR + "/adapter")
     tok.save_pretrained(OUT_DIR + "/adapter")
     card = {
