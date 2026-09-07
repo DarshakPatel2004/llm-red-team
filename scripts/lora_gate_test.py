@@ -98,7 +98,7 @@ def do_train() -> None:
         learning_rate=TRAIN_CFG["lr"], per_device_train_batch_size=TRAIN_CFG["batch"],
         gradient_accumulation_steps=TRAIN_CFG["grad_accum"], logging_steps=5,
         save_steps=50, save_total_limit=1, bf16=True, seed=SEED,
-        max_seq_length=TRAIN_CFG["max_len"], report_to="none")
+        max_length=TRAIN_CFG["max_len"], report_to="none")
     SFTTrainer(model=model, train_dataset=ds, args=args).train()
     model.save_pretrained(OUT_DIR + "/adapter")
     tok.save_pretrained(OUT_DIR + "/adapter")
