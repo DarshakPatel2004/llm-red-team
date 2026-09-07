@@ -205,6 +205,7 @@ def run(models: str | None, tiers: str | None, all_enabled: bool, dry_run: bool,
                         defenses=_resolve_defenses(defenses), defense_mode=defense_mode)
 
     selected = ALL_PROMPTS
+    tier_nums: list[int] = []
     if tiers:
         tier_nums = [int(t) for t in tiers.split(",")]
         selected = [p for p in selected if p["tier"] in tier_nums]
@@ -216,6 +217,15 @@ def run(models: str | None, tiers: str | None, all_enabled: bool, dry_run: bool,
         results = _run_live(runner, selected, parallel=parallel, verbose=True)
     else:
         results = runner.run_all() if selected == ALL_PROMPTS else _run_subset(runner, selected)
+    # Tier 6 conversations run after single-turns (history can't parallelize).
+    if tiers and 6 in tier_nums:
+        from llm_red_team.attacks import ALL_CONVERSATIONS
+        console.print(f"\n[bold]Running {len(ALL_CONVERSATIONS)} Tier-6 conversations...[/bold]\n")
+        for convo in ALL_CONVERSATIONS:
+            r = runner.run_conversation(convo)
+            results.append(r)
+            _print_test({**r, "prompt_text": r.get("prompt_text", convo["id"])}, verbose)
+        runner.results = results
     summary = runner.get_summary()
     _print_results(console, summary, results)
 

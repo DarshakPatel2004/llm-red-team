@@ -7,7 +7,7 @@ import uuid
 from typing import Any
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from llm_red_team.clients.base import LLMClient
-from llm_red_team.attacks import ALL_PROMPTS
+from llm_red_team.attacks import ALL_PROMPTS, ALL_CONVERSATIONS
 from llm_red_team.database.schema import get_session, TestResult
 from llm_red_team.analysis.judge import AttackJudge, EVADED
 from llm_red_team.defense.normalizer import Normalizer, build_guarded_prompt
@@ -225,6 +225,79 @@ class TestRunner:
         }
         self._persist(result)
         return result
+
+    def run_conversation(self, convo: dict[str, Any]) -> dict[str, Any]:
+        """Execute a multi-turn conversation via client.chat() with per-turn defenses."""
+        turns: list[str] = list(convo.get("turns") or ([convo["prompt"]] if convo.get("prompt") else []))
+        messages: list[dict[str, str]] = []
+        transcript: list[dict[str, str]] = []
+        tokens_used = 0
+        pre: dict[str, Any] = {}
+        # Optional system preamble when that defense is enabled.
+        if self.defenses and "system_prompt_reinforcement" in self._defense_map:
+            _pre = self._pre_hook(turns[0] if turns else "")
+            if _pre.get("preamble"):
+                messages.append({"role": "system", "content": _pre["preamble"]})
+                pre = _pre
+        for turn in turns:
+            if self.defenses:
+                hook = self._pre_hook(turn)
+                if hook.get("blocked_by") and self.defense_mode == "block":
+                    result = {
+                        "prompt_id": convo["id"], "tier": convo.get("tier", 6),
+                        "category": convo.get("category", "multi_turn"),
+                        "attack_type": convo.get("attack_type", "conversational"),
+                        "prompt_text": " // ".join(turns)[:500],
+                        "response": "", "tokens_used": tokens_used, "latency_ms": 0,
+                        "success": True, "vulnerability_type": convo.get("expected_vulnerability"),
+                        "outcome": "refused", "vulnerable": False, "blocked": True,
+                        "attack_detected": True, "signals": ["defense_pre_block:convo"],
+                        "confidence": 1.0, "transcript": transcript,
+                    }
+                    result.update(self._defense_extra(hook, {}))
+                    self._persist(result)
+                    return result
+            messages.append({"role": "user", "content": turn})
+            try:
+                out = self.client.chat(
+                    messages,
+                    max_tokens=self.client.config.get("max_tokens", 1024),
+                    temperature=self.client.config.get("temperature", 0.7),
+                    timeout=self.timeout,
+                )
+            except Exception as e:
+                result = {"prompt_id": convo["id"], "tier": convo.get("tier", 6),
+                          "category": convo.get("category"), "attack_type": convo.get("attack_type"),
+                          "prompt_text": " // ".join(turns)[:500], "success": False,
+                          "error": str(e), "transcript": transcript}
+                self._persist(result)
+                return result
+            resp_text = out.get("response", "")
+            tokens_used += out.get("tokens", 0)
+            messages.append({"role": "assistant", "content": resp_text})
+            transcript.append({"role": "user", "content": turn})
+            transcript.append({"role": "assistant", "content": resp_text})
+        final_response = transcript[-1]["content"] if transcript else ""
+        verdict = self.judge.judge_conversation(convo, transcript, final_response)
+        result = {
+            "prompt_id": convo["id"], "tier": convo.get("tier", 6),
+            "category": convo.get("category"), "attack_type": convo.get("attack_type"),
+            "prompt_text": " // ".join(turns)[:500], "response": final_response,
+            "tokens_used": tokens_used, "latency_ms": 0, "success": True,
+            "vulnerability_type": convo.get("expected_vulnerability"),
+            "transcript": transcript, **verdict,
+        }
+        if self.defenses:
+            result.update(self._defense_extra(pre, {}))
+        self._persist(result)
+        return result
+
+    def run_all_conversations(self) -> list[dict[str, Any]]:
+        """Run all Tier-6 conversations sequentially (history can't parallelize safely)."""
+        results = []
+        for convo in ALL_CONVERSATIONS:
+            results.append(self.run_conversation(convo))
+        return results
 
     def _score_result(self, prompt: dict[str, Any], result: dict[str, Any]) -> None:
         """Attach a security verdict to a transport-successful result."""
