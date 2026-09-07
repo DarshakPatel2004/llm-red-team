@@ -179,3 +179,8 @@ correct and are unchanged.
 - Cloud clients (Gemini/OpenAI, `19eb425`) are built and smoke-tested but not
   part of the 112 ground truth; Gemini free quota is 20 req/min with
   RetryInfo backoff.
+- LoRA gate-test is packaged, not run: dev box has no CUDA torch build,
+  ~1.2 GB free VRAM (6 GB RTX 4050 laptop), no peft, and Windows
+  bitsandbytes pain. `scripts/lora_gate_test.py` is the push-button Colab T4
+  path (QLoRA, 41 pairs, experiment card); gate verdict gets recorded back
+  here per `docs/EVAL_GATE_RULE.md`.
