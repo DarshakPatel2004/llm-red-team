@@ -76,6 +76,9 @@ class PromptContradictionDefense(DefenseStrategy):
         r"\b(new rule|supersede|replace|overwrite)\b.{0,40}?\bsystem\b.{0,30}?\b(prompt|message|instructions)\b",
         r"\[system\]\s*(override|new rule|ignore)",
         r"\bpretend\b.{0,30}?\bsystem\b.{0,30}?\b(prompt|message|instructions)\b.{0,30}?\b(is|doesn'?t exist|gone)\b",
+        r"\b(pick|choose|select)\b.{0,30}?\bthe variant\b.{0,30}?\bnot a refusal\b",
+        r"\banswer using only\b.{0,30}?\b(second|unrestricted|unfiltered|alternate)\b.{0,20}?\bstyle\b",
+        r"\b(variant [ab]|option [12])\b.{0,40}?\b(refusal|comply|answer)\b",
     ]
 
     def __init__(self, config=None):
@@ -125,6 +128,8 @@ class SystemPromptReinforcementDefense(DefenseStrategy):
         r"\[system\]",
         r"\bnew system\b.{0,20}?\b(prompt|message|rule)\b",
         r"\b(override|replace)\b.{0,20}?\byour system\b",
+        r"\b(rewrite|restate|rephrase|reformulate)\b.{0,30}?\b(your|the)\b.{0,20}?\b(guard ?rails|rules|instructions|safety guidelines)\b.{0,30}?\b(then adopt|then follow|and adopt|and follow)\b",
+        r"\badopt\b.{0,20}?\b(your|the) rewrite\b",
     ]
 
     def __init__(self, config=None):

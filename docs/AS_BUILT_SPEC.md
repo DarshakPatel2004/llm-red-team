@@ -66,8 +66,10 @@ output_modification (block default / sanitize redaction). The other 11 keep
 prior behavior with a tolerant `**_ctx` signature.
 
 Key detector facts:
-- Contradiction: 4 override regex families on normalized text (0/100 benign FPR).
-- Roleplay: 6 persona-pattern families incl. DAN/GODMODE/alter-ego/developer-mode.
+- Contradiction: override regexes + forced-choice/pick-variant + answer-in-style
+  families on normalized text (0/100 benign FPR; catches t5-003/t5-004 class).
+- System reinforcement: override detection + guardrail self-rewrite/adopt
+  family (catches t5-012 class).- Roleplay: 6 persona-pattern families incl. DAN/GODMODE/alter-ego/developer-mode.
 - Tokenization gate blocks on removed-char count or NFKC+mixed-script, not on
   normalization alone (fullwidth neutralized by NFKC is sanitization, not a block).
 - Output constant-echo is a **generalized pattern**
