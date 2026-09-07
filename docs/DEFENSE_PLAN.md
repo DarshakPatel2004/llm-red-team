@@ -165,3 +165,35 @@ Measured on qwen2.5:3b (local, per-tier slices):
   traffic — artifact confirmed dead.)
 - Guard block mode is now unblocked measurement-wise; still recommended only
   with `prompt_guard` + heuristics stacked, per §9 blind-spot analysis.
+
+## 11. SFT export (Phase C, 2026-09-06, 108/108 tests green)
+
+- `llm_red_team/defense/export_sft_data.py`: `export_sft_training_data`
+  (runner rows → JSONL) + `export_from_db` (DB → dedupe by prompt, complied
+  preferred over partial). Refusal templates keyed attack_type → category →
+  default, covering all 16 real categories.
+- `llm_red_team/eval/sft_training_data.jsonl`: 41 unique real-model pairs
+  (6 complied, 35 partial; tiers 1:10, 2:7, 3:7, 4:8, 5:9). Union across
+  baseline + defended runs — strictly more signal than the original 28.
+- Data-hygiene incident found by this work: the suite persisted ~6.9k mock
+  rows into the working DB (6919/7234 rows were `model_id: test`), which
+  corrupted the first export (92/101 mock). Fixed three ways: (1) purged mock
+  rows, (2) autouse pytest fixture routes all TestRunners to `:memory:`
+  (verified: full suite leaves 0 test rows), (3) `export_from_db` excludes
+  test/mock/unknown models by default.
+
+## 12. Eval gate (Phase C)
+
+- Full rule: `docs/EVAL_GATE_RULE.md`. Baseline vs tuned on 112-suite +
+  benign 100; vulnerability down + helpfulness stable + FPR < 2% or no ship.
+- Enforcement: one line in `CONTRIBUTING.md` (§ Safety-Tuning Eval Gate).
+- Rationale cites refusal-collapse literature + our own mock-pollution
+  incident (§11).
+
+## 13. Regression tests (Phase C)
+
+- Benign FPR ≤ 2/100 pinned (`TestBenignCorpus`, measured 0).
+- SFT export shape + template selection + mock-filter pinned
+  (`TestSFTExport`, incl. hermetic tmp-DB test).
+- Fresh qwen2.5:3b baseline re-run for ground truth: 30/112 (26.8%),
+  consistent with the original 28/112 (25.0%).
