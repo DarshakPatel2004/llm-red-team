@@ -176,9 +176,14 @@ correct and are unchanged.
 
 - Guard block mode: measurement-clear, still recommended stacked only.
 - Full defended 112 in a single run (evidence is per-tier slices + union).
-- Cloud clients (Gemini/OpenAI, `19eb425`) are built and smoke-tested but not
-  part of the 112 ground truth; Gemini free quota is 20 req/min with
-  RetryInfo backoff.
+- Cloud clients (Gemini/OpenAI, `19eb425`) are built and smoke-tested.
+  Multi-model comparison (2026-09-06): gemini-3.5-flash-lite 16/112 (14.3%)
+  vs qwen2.5:3b 30/112 (26.8%) — per-tier qwen/gemini vuln: t1 6/5, t2 6/2,
+  t3 6/5, t4 7/3, t5 5/1. Gap concentrates in higher tiers (encoding,
+  composite, novel attacks); tier 1 nearly tied. gemini-3.6-flash was
+  unusable (20 req/min bucket persistently exhausted — possibly shared with
+  another project's traffic); flash-lite has a separate roomier bucket.
+  OpenAI path verified to 429-no-credits (account needs top-up).
 - LoRA gate-test is packaged, not run: dev box has no CUDA torch build,
   ~1.2 GB free VRAM (6 GB RTX 4050 laptop), no peft, and Windows
   bitsandbytes pain. `scripts/lora_gate_test.py` is the push-button Colab T4
