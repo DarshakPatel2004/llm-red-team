@@ -49,3 +49,12 @@ Protect" (2026) on buffer-and-reinforce fine-tuning.
 Every gated experiment must record: base weights + hash, training data hash,
 method + hyperparams, both-suite results table, and the gate verdict. No card,
 no merge.
+
+## 6. Shared-model rule
+
+Tuned weights are separate artifacts (adapters, distinct model IDs/endpoints).
+They MUST NEVER overwrite or replace a model served to another project —
+no reusing a shared Ollama model name, no in-place merges into production
+weights. The red-team suite only ever QUERIES models; it has no code path
+that modifies served weights. Heavy local suite runs (parallel workers
+against shared Ollama) should be coordinated with whoever depends on it.
