@@ -18,7 +18,11 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 from pathlib import Path
+
+# Colab runs from a plain clone: make the repo importable without install.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 BASE_MODEL = "Qwen/Qwen2.5-3B-Instruct"
 ADAPTER_DIR = "artifacts/lora-gate-test/adapter"
