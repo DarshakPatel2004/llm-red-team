@@ -25,6 +25,45 @@ models:
     rate_limit: 10
     tags: [security, production]
 
+  llama3_1_8b:
+    type: local
+    provider: ollama
+    model_id: llama3.1:8b-instruct-q4_K_M
+    endpoint: http://localhost:11434
+    enabled: true
+    max_tokens: 2048
+    temperature: 0.7
+    timeout: 120
+    retry_attempts: 3
+    rate_limit: 5
+    tags: [local, llama, instruct]
+
+  qwen2_5_7b:
+    type: local
+    provider: ollama
+    model_id: qwen2.5:7b-instruct-q4_K_M
+    endpoint: http://localhost:11434
+    enabled: true
+    max_tokens: 2048
+    temperature: 0.7
+    timeout: 120
+    retry_attempts: 3
+    rate_limit: 5
+    tags: [local, qwen, instruct]
+
+  mistral_7b_instruct:
+    type: local
+    provider: ollama
+    model_id: mistral:7b-instruct-q4_K_M
+    endpoint: http://localhost:11434
+    enabled: true
+    max_tokens: 2048
+    temperature: 0.7
+    timeout: 120
+    retry_attempts: 3
+    rate_limit: 5
+    tags: [local, mistral, instruct]
+
   llama:
     type: local
     provider: ollama
